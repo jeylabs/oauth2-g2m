@@ -4,11 +4,11 @@
 namespace Jeylabs\OAuth2\Client\Provider;
 
 
+use InvalidArgumentException;
 use League\OAuth2\Client\Provider\AbstractProvider;
 use League\OAuth2\Client\Provider\Exception\IdentityProviderException;
 use League\OAuth2\Client\Token\AccessToken;
 use League\OAuth2\Client\Tool\BearerAuthorizationTrait;
-use League\OAuth2\Client\Grant\AbstractGrant;
 use Psr\Http\Message\ResponseInterface;
 
 class G2MProvider extends AbstractProvider
@@ -65,6 +65,57 @@ class G2MProvider extends AbstractProvider
      */
     private $responseResourceOwnerId = 'account_key';
 
+    public function __construct(array $options = [], array $collaborators = [])
+    {
+        $this->assertRequiredOptions($options);
+
+        $possible = $this->getConfigurableOptions();
+        $configured = array_intersect_key($options, array_flip($possible));
+
+        foreach ($configured as $key => $value) {
+            $this->$key = $value;
+        }
+
+        // Remove all options that are only used locally
+        $options = array_diff_key($options, $configured);
+
+        parent::__construct($options, $collaborators);
+
+    }
+
+    private function assertRequiredOptions(array $options)
+    {
+        $missing = array_diff_key(array_flip($this->getRequiredOptions()), $options);
+
+        if (!empty($missing)) {
+            throw new InvalidArgumentException(
+                'Required options not defined: ' . implode(', ', array_keys($missing))
+            );
+        }
+    }
+
+    protected function getConfigurableOptions()
+    {
+        return array_merge($this->getRequiredOptions(), [
+            'accessTokenMethod',
+            'accessTokenResourceOwnerId',
+            'scopeSeparator',
+            'responseError',
+            'responseCode',
+            'responseResourceOwnerId',
+            'scopes',
+        ]);
+    }
+
+    protected function getRequiredOptions()
+    {
+        return [
+            'urlAuthorize',
+            'urlAccessToken',
+            'urlResourceOwnerDetails',
+        ];
+    }
+
     protected function checkResponse(ResponseInterface $response, $data)
     {
         if (!empty($data[$this->responseError])) {
@@ -97,5 +148,12 @@ class G2MProvider extends AbstractProvider
     public function getDefaultScopes()
     {
         return $this->scopes;
+    }
+
+    protected function getDefaultHeaders()
+    {
+        return [
+            'Authorization' => 'Basic ' . base64_encode($this->clientId . ':' . $this->clientSecret),
+        ];
     }
 }
